@@ -9,6 +9,13 @@ pub struct Environment {
 }
 
 impl Environment {
+  pub fn new_with_outer(outer: Rc<RefCell<Environment>>) -> Self {
+    Environment {
+      store: HashMap::new(),
+      outer: Some(outer),
+    }
+  }
+
   pub fn insert(&mut self, key: String, val: Object) {
     self.store.insert(key, val);
   }

@@ -9,7 +9,7 @@ use crate::object::{EvalResult, Interrupt, Object};
 use crate::token::Token;
 
 pub struct Evaluator {
-  env: Rc<RefCell<Environment>>,
+  pub env: Rc<RefCell<Environment>>,
 }
 
 impl Evaluator {
@@ -63,7 +63,7 @@ impl Evaluator {
     match expr {
       Expression::Ident(Token::IDENT(ident)) => match self.env.borrow().get(&ident) {
         Some(val) => Ok(val),
-        None => Interrupt::error(format!("Invalid variable name: {}", ident)),
+        None => Interrupt::error(format!("Invalid variable name {}", ident)),
       },
       Expression::Integer(Token::INT(num)) => Ok(Object::Integer(num)),
       Expression::Prefix(op, expr) => {
@@ -86,10 +86,7 @@ impl Evaluator {
 
   fn eval_call_expression(&mut self, func: Box<Expression>, args: Vec<Expression>) -> EvalResult {
     if let Object::Function(params, body) = self.eval_expression(*func)? {
-      let mut enclosed_env = Environment {
-        store: HashMap::new(),
-        outer: Some(self.env.clone()),
-      };
+      let mut enclosed_env = Environment::new_with_outer(self.env.clone());
       for (param, arg) in params.iter().zip(args) {
         let param_name = match param {
           Expression::Ident(Token::IDENT(inner)) => inner,
@@ -133,11 +130,13 @@ impl Evaluator {
       _ => {
         let left_int = match left {
           Object::Integer(num) => num,
-          _ => return Interrupt::error(format!("Left side of expression is not an int: {}", left)),
+          _ => return Interrupt::error(format!("Left side of expression is not an int {}", left)),
         };
         let right_int = match right {
           Object::Integer(num) => num,
-          _ => return Interrupt::error(format!("Right side of expression is not an int: {}", right)),
+          _ => {
+            return Interrupt::error(format!("Right side of expression is not an int {}", right))
+          }
         };
 
         match op {

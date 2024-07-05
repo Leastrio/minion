@@ -40,7 +40,7 @@ pub enum Token {
 impl fmt::Display for Token {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Token::IDENT(_) => write!(f, "IDENTIFIER"),
+      Token::IDENT(ident) => write!(f, "{}", ident),
       Token::INT(_) => write!(f, "INTEGER"),
       _ => write!(f, "{:?}", self),
     }

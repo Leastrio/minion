@@ -2,9 +2,12 @@ mod ast;
 mod env;
 mod eval;
 mod lexer;
+mod minions;
 mod object;
 mod parser;
 mod token;
+
+use std::io::{self, Write};
 
 use eval::Evaluator;
 use lexer::Lexer;
@@ -12,30 +15,37 @@ use object::Interrupt;
 use parser::Parser;
 
 fn main() {
-  let input = "
-   let counter = fn(x) {
-if (x > 100) {
-return x;
-} else {
-let foobar = 9999;
-counter(x + 1);
-}
-};
-count(0); 
-    ";
+  let mut eval = Evaluator::new();
 
-  let mut parser = Parser::new(Lexer::new(input));
-  let program = parser.parse_program();
+  println!("Welcome to the Minion REPL 🍌🍌🍌🍌");
+  println!("-----------------------------------");
 
-  if parser.errors.len() > 0 {
-    for err in parser.errors {
-      println!("{}", err);
-    }
-  } else {
-    let mut eval = Evaluator::new();
-    match eval.eval(program) {
-      Ok(obj) | Err(Interrupt::Return(obj)) => println!("Program returned: {}", obj),
-      Err(Interrupt::Error(err)) => println!("{}", err),
+  loop {
+    let mut input = String::new();
+    print!(">>> ");
+    io::stdout().flush().unwrap();
+    io::stdin()
+      .read_line(&mut input)
+      .expect("Failed to read repl line");
+
+    let mut parser = Parser::new(Lexer::new(&input));
+    let program = parser.parse_program();
+
+    if parser.errors.len() > 0 {
+      // TODO: Add support for block expressions
+      for error in parser.errors {
+        match error {
+          parser::ParserError::UnexpectedToken(_, _) => println!("{}", error),
+          parser::ParserError::UnknownPrefix(_) => println!("{}", error),
+          parser::ParserError::InvalidIdent(_) => println!("{}", error),
+        }
+      }
+    } else {
+      match eval.eval(program) {
+        Ok(object::Object::NoOp) => (),
+        Ok(obj) | Err(Interrupt::Return(obj)) => println!("{}", obj),
+        Err(Interrupt::Error(err)) => println!("{}", err),
+      }
     }
   }
 }

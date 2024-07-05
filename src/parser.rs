@@ -1,7 +1,5 @@
 use crate::{
-  ast::{self, BlockStatement, Expression, Precedence, Program, Statement},
-  lexer::Lexer,
-  token::Token,
+  ast::{self, BlockStatement, Expression, Precedence, Program, Statement}, lexer::Lexer, minions, token::Token
 };
 use core::fmt;
 
@@ -18,6 +16,7 @@ pub enum ParserError {
   // expected, got
   UnexpectedToken(Token, Token),
   UnknownPrefix(Token),
+  InvalidIdent(Token)
 }
 
 impl fmt::Display for ParserError {
@@ -27,6 +26,7 @@ impl fmt::Display for ParserError {
         write!(f, "Expected: {}, got: {}", expected, got)
       }
       ParserError::UnknownPrefix(got) => write!(f, "Unknown prefix, got: {}", got),
+      ParserError::InvalidIdent(ident) => write!(f, "Invalid minion name, got: {}", ident)
     }
   }
 }
@@ -80,7 +80,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_expression(&mut self, precedence: Precedence) -> Option<Expression> {
-    let mut left = match self.curr_token {
+    let mut left = match &self.curr_token {
       Token::IDENT(_) => Some(Expression::Ident(self.curr_token.clone())),
       Token::INT(_) => Some(Expression::Integer(self.curr_token.clone())),
       Token::BANG | Token::MINUS => self.parse_prefix_expression(),
@@ -160,7 +160,7 @@ impl<'a> Parser<'a> {
       return None;
     }
 
-    let body = self.parse_block_statement();
+    let body = self.parse_block_statement()?;
 
     return Some(Expression::Function(params, body));
   }
@@ -174,11 +174,18 @@ impl<'a> Parser<'a> {
     }
 
     self.next_token();
+    
+    if !minions::is_valid_minion(&self.curr_token) {
+      self.errors.push(ParserError::InvalidIdent(self.curr_token.clone()));
+    }
 
     params.push(Expression::Ident(self.curr_token.clone()));
     while self.peek_token == Token::COMMA {
       self.next_token();
       self.next_token();
+      if !minions::is_valid_minion(&self.curr_token) {
+        self.errors.push(ParserError::InvalidIdent(self.curr_token.clone()));
+      }
       params.push(Expression::Ident(self.curr_token.clone()));
     }
 
@@ -195,7 +202,7 @@ impl<'a> Parser<'a> {
     }
 
     self.next_token();
-    let condition = self.parse_expression(Precedence::LOWEST);
+    let condition = self.parse_expression(Precedence::LOWEST)?;
 
     if !self.expect_peek_token(Token::RPAREN) {
       return None;
@@ -204,7 +211,7 @@ impl<'a> Parser<'a> {
       return None;
     }
 
-    let consequence = self.parse_block_statement();
+    let consequence = self.parse_block_statement()?;
     let mut alternative = None;
 
     if self.peek_token == Token::ELSE {
@@ -213,17 +220,17 @@ impl<'a> Parser<'a> {
         return None;
       }
 
-      alternative = Some(self.parse_block_statement());
+      alternative = Some(self.parse_block_statement()?);
     }
 
     return Some(Expression::If(
-      Box::new(condition?),
+      Box::new(condition),
       consequence,
       alternative,
     ));
   }
 
-  fn parse_block_statement(&mut self) -> BlockStatement {
+  fn parse_block_statement(&mut self) -> Option<BlockStatement> {
     let mut block: BlockStatement = vec![];
     self.next_token();
     while self.curr_token != Token::RBRACE && self.curr_token != Token::EOF {
@@ -233,7 +240,16 @@ impl<'a> Parser<'a> {
       self.next_token();
     }
 
-    return block;
+    if self.curr_token != Token::RBRACE {
+      self.errors.push(ParserError::UnexpectedToken(
+        Token::RBRACE,
+        self.curr_token.clone(),
+      ));
+
+      return None;
+    }
+
+    return Some(block);
   }
 
   fn parse_grouped_expression(&mut self) -> Option<Expression> {
@@ -282,6 +298,9 @@ impl<'a> Parser<'a> {
     }
 
     let ident = self.curr_token.clone();
+    if !minions::is_valid_minion(&ident) {
+      self.errors.push(ParserError::InvalidIdent(ident.clone()));
+    }
 
     if !self.expect_peek_token(Token::ASSIGN) {
       return None;
